@@ -1,0 +1,138 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis, zscore
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# Load the dataset
+file_path = 'dataset.csv'  # Replace with the correct file path
+data = pd.read_csv(file_path)
+
+# Q1: Identify Missing or Incorrect Data and Clean
+# Check missing values
+# We are checking for any missing data to identify gaps in the dataset.
+print("Missing Values:\n", data.isnull().sum())
+
+# Handle missing values for numeric columns by imputing mean values grouped by species
+# If a penguin has missing measurements, fill in the blanks with the average values for its species.
+for col in ['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g']:
+    data[col] = data.groupby('species')[col].transform(lambda x: x.fillna(x.mean()))
+
+# Fill missing values in 'sex' with 'Unknown'
+# For penguins with missing gender data, we label them as "Unknown."
+data['sex'] = data['sex'].fillna('Unknown')
+
+print("\nData after handling missing values:\n", data.isnull().sum())
+
+# Q2: Average body_mass_g for Gentoo penguins
+# Calculate the average weight for Gentoo penguins to understand their typical body size.
+gentoo_avg_body_mass = data[data['species'] == 'Gentoo']['body_mass_g'].mean()
+print("\nAverage body mass for Gentoo penguins:", gentoo_avg_body_mass)
+
+# Q3: Distributions of bill_length_mm and bill_depth_mm
+# Calculate skewness and kurtosis for each species to understand how their beak measurements differ.
+for species in data['species'].unique():
+    subset = data[data['species'] == species]
+    for col in ['bill_length_mm', 'bill_depth_mm']:
+        print(f"{col} for {species} - Skewness: {skew(subset[col])}, Kurtosis: {kurtosis(subset[col])}")
+
+# Visualize distributions
+# Using boxplots to compare beak length and depth across different species.
+sns.boxplot(data=data, x='species', y='bill_length_mm')
+plt.title("Bill Length Distribution by Species")
+plt.show()
+
+sns.boxplot(data=data, x='species', y='bill_depth_mm')
+plt.title("Bill Depth Distribution by Species")
+plt.show()
+
+# Q4: Identify Outliers and Visualize
+# Function to identify outliers based on the IQR method (1.5x rule).
+def detect_outliers(feature):
+    Q1 = data[feature].quantile(0.25)
+    Q3 = data[feature].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return data[(data[feature] < lower_bound) | (data[feature] > upper_bound)]
+
+# Visualize outliers using boxplots for each numerical feature.
+for feature in ['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g']:
+    outliers = detect_outliers(feature)
+    print(f"\nOutliers in {feature}:\n", outliers)
+    sns.boxplot(x=data[feature])
+    plt.title(f"Outliers in {feature}")
+    plt.show()
+
+# Q5: Curse of Dimensionality and PCA
+# Standardize the dataset to prepare for PCA.
+# PCA reduces the complexity of the dataset while keeping most of the important information.
+X = data[['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g']]
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Perform PCA to reduce dimensions to 2.
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+
+# Display the explained variance to understand how much information is captured by the principal components.
+print("\nExplained Variance Ratio by PCA:", pca.explained_variance_ratio_)
+
+# Visualize the PCA components to see species grouping.
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=data['species'].astype('category').cat.codes, cmap='viridis')
+plt.title("PCA Visualization")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.show()
+
+# Q6: Visualizations for bill_length_mm vs bill_depth_mm
+# Scatter plot to see the relationship between beak length and depth for each species.
+sns.scatterplot(data=data, x='bill_length_mm', y='bill_depth_mm', hue='species')
+plt.title("Scatter Plot")
+plt.show()
+
+# KDE plot to show density regions for beak measurements.
+sns.kdeplot(data=data, x='bill_length_mm', y='bill_depth_mm', hue='species', fill=True)
+plt.title("Kernel Density Estimation (KDE)")
+plt.show()
+
+# Box plot to compare beak length by species.
+sns.boxplot(data=data, x='species', y='bill_length_mm')
+plt.title("Box Plot")
+plt.show()
+
+# Violin Plot: Combines box plot and data distribution.
+sns.violinplot(data=data, x='species', y='bill_length_mm', hue='sex', split=True)
+plt.title("Violin Plot: Bill Length by Species and Sex")
+plt.show()
+
+# Pair Plot: Shows relationships between features.
+sns.pairplot(data, vars=['bill_length_mm', 'bill_depth_mm'], hue='species')
+plt.title("Pair Plot: Bill Length vs Bill Depth by Species")
+plt.show()
+
+# Joint Plot: Combines scatter and KDE for beak measurements.
+sns.jointplot(data=data, x='bill_length_mm', y='bill_depth_mm', kind='kde', hue='species')
+plt.title("Joint KDE Plot: Bill Length vs Bill Depth")
+plt.show()
+
+# Heatmap: Displays correlations between features.
+corr_matrix = data[['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g']].corr()
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f")
+plt.title("Heatmap of Feature Correlations")
+plt.show()
+
+# Q7: Maximum flipper_length_mm for Each Species and Island
+# Group by species and island to find the penguin with the longest flippers.
+max_flippers = data.groupby(['species', 'island'])['flipper_length_mm'].max().reset_index()
+print("\nMaximum flipper_length_mm by species and island:\n", max_flippers)
+
+# Q8: Perform Z-Score Normalization
+# Normalize numerical features to z-scores to make them comparable on the same scale.
+for col in ['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g']:
+    data[col + '_zscore'] = zscore(data[col])
+
+# Display the dataset with normalized features.
+print("\nDataset after Z-Score Normalization:\n", data.head())
